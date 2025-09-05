@@ -1,0 +1,16 @@
+Flask==3.0.3
+Flask-Cors==4.0.0
+google-generativeai==0.8.3
+python-dotenv==1.0.1
+requests==2.32.3
+httpx==0.27.0
+numpy==2.1.2
+pandas==2.2.2
+ollama==0.5.3
+
+# Base de datos
+SQLAlchemy==2.0.31
+psycopg[binary]==3.2.9   # necesario Postgres (Render)
+
+# Servidor para Render
+gunicorn==23.0.0

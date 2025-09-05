@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Analytics Console — GuíaIA</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #0f172a;      /* slate-900 */
+      --panel: #111827;   /* gray-900 */
+      --text: #e5e7eb;    /* gray-200 */
+      --muted: #94a3b8;   /* slate-400 */
+      --brand: #22c55e;   /* green-500 */
+      --error: #ef4444;   /* red-500 */
+      --border: #1f2937;  /* gray-800 */
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 24px;
+      background: radial-gradient(1200px 700px at 10% -20%, #0b1225 10%, var(--bg) 60%);
+      color: var(--text);
+      font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    header {
+      display:flex; align-items:center; justify-content:space-between;
+      gap:16px; margin-bottom:20px;
+    }
+    h1 { margin:0; font-size:20px; font-weight:700; letter-spacing:.2px; }
+    .actions { display:flex; gap:8px; flex-wrap:wrap; }
+    button, input, textarea, select {
+      background:#0b1020; color:var(--text); border:1px solid var(--border);
+      border-radius:10px; padding:10px 12px; outline:none;
+    }
+    button { cursor:pointer; }
+    button.brand { background:linear-gradient(180deg, #22c55e 0%, #16a34a 100%); border:0; color:#00140a; font-weight:700; }
+    button.ghost { background:#0b1020; }
+    button:disabled { opacity:.6; cursor:not-allowed; }
+    .grid { display:grid; grid-template-columns: 1fr; gap:14px; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .card {
+      background: linear-gradient(180deg, rgba(23,31,64,.85), rgba(10,13,28,.7));
+      border:1px solid var(--border); border-radius:16px; padding:16px;
+      box-shadow: 0 6px 24px rgba(0,0,0,.25);
+    }
+    textarea { width:100%; min-height:160px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    input[type="number"] { width:90px; }
+    .muted { color:var(--muted); }
+    #out { margin-top:12px; overflow:auto; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border:1px solid var(--border); padding:8px 10px; text-align:left; vertical-align:top; }
+    th { background:#0b1020; position:sticky; top:0; }
+    .error { color: var(--error); white-space: pre-wrap; }
+    .chip { padding:8px 10px; background:#0b1020; border:1px solid var(--border); border-radius:999px; cursor:pointer; }
+    .chips { display:flex; gap:8px; flex-wrap:wrap; }
+    .kpi { display:flex; gap:14px; flex-wrap:wrap; }
+    .kpi .card { min-width:180px; }
+    .kpi .value { font-size:20px; font-weight:800; }
+
+    /* ---- pretty JSON / bloques tipo ficha ---- */
+    pre.json {
+      background:#0b1020; border:1px solid var(--border); border-radius:10px;
+      padding:10px; margin:0; white-space:pre-wrap; word-break:break-word;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+    }
+    .block {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      margin: 0;
+      color: var(--text);
+    }
+    .block b { display:inline-block; min-width:170px; }
+    .small-muted { color:#94a3b8; font-size:12px; }
+    .toggle {
+      cursor:pointer; font-size:12px; color:#93c5fd; margin-top:6px; display:inline-block;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Analytics Console <span class="muted">— GuíaIA</span></h1>
+    <div class="actions">
+      <!-- Quitamos Cargar KPIs -->
+      <button id="btn-logout" class="ghost">Cerrar sesión</button>
+    </div>
+  </header>
+
+  <section class="grid">
+    <!-- KPIs rápidos -->
+    <div class="kpi" id="kpi">
+      <div class="card"><div class="muted">Sesiones totales</div><div class="value" id="kpi-total">—</div></div>
+      <div class="card"><div class="muted">Tiempo pág (prom)</div><div class="value" id="kpi-avgpage">—</div></div>
+      <div class="card"><div class="muted">T. primer prompt (prom)</div><div class="value" id="kpi-avgfirst">—</div></div>
+    </div>
+
+    <!-- Presets -->
+    <div class="card">
+      <div class="muted" style="margin-bottom:8px;">Consultas rápidas</div>
+      <div class="chips">
+        <span class="chip" data-sql="SELECT id, country, city, started_at, ended_at FROM sessions ORDER BY started_at DESC LIMIT 20">Últimas sesiones</span>
+        <span class="chip" data-sql="SELECT prompts_initial_count, wrong_answer_count, improve_clicks_count, clipboard_copy_count, new_prompt_clicks_count, time_on_page_ms, time_to_first_prompt_ms FROM session_metrics LIMIT 20">Métricas (20)</span>
+        <span class="chip" data-sql="SELECT id, session_id, prompt_initial_json, created_at FROM prompts ORDER BY created_at DESC LIMIT 20">Prompts recientes</span>
+        <span class="chip" data-sql="SELECT country, COUNT(*) AS n FROM sessions GROUP BY country ORDER BY n DESC LIMIT 10">Top países</span>
+      </div>
+    </div>
+
+    <!-- Consola SQL -->
+    <div class="card">
+      <div class="row">
+        <label class="muted">Límite</label>
+        <input type="number" id="limit" value="100" min="1" max="100" />
+        <button id="run" class="brand">Ejecutar SELECT</button>
+      </div>
+      <textarea id="sql" placeholder="Escribe un SELECT (solo lectura)...&#10;Ejemplo: SELECT * FROM sessions ORDER BY started_at DESC"></textarea>
+      <div id="out" class="muted">Sin resultados aún.</div>
+    </div>
+  </section>
+
+  <!-- Auto-logout al cerrar la pestaña -->
+  <script>
+    window.addEventListener('beforeunload', () => {
+      try {
+        const blob = new Blob([], { type: 'application/json' });
+        navigator.sendBeacon('/analytics/logout', blob);
+      } catch (e) {
+        fetch('/analytics/logout', { method: 'POST', keepalive: true });
+      }
+    });
+  </script>
+
+  <script>
+    const $ = (sel) => document.querySelector(sel);
+    const $$ = (sel) => [...document.querySelectorAll(sel)];
+
+    // --- Helpers de formato ---
+    function tryParseJSON(v) {
+      if (v == null) return null;
+      if (typeof v === 'object') return v; // jsonb en Postgres
+      if (typeof v !== 'string') return null;
+      const s = v.trim();
+      if (!s.startsWith('{') && !s.startsWith('[')) return null;
+      try { return JSON.parse(s); } catch { return null; }
+    }
+
+    function fmtPromptObject(obj) {
+      if (!obj || typeof obj !== 'object') return null;
+      const p = obj.prompt_text || obj.prompt || null;
+      const a = obj.answers || {};
+      const q = obj.questions || [];
+
+      if (!p && !Object.keys(a).length) return null;
+
+      if (p) {
+        const lines = p.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+        const pairs = [];
+        for (const line of lines) {
+          const m = line.match(/^([\p{L}\s\.]+):\s*(.+)$/u); // "Etiqueta: valor"
+          if (m) pairs.push([m[1].replace(/\.$/,'').trim(), m[2].trim()]);
+        }
+        if (pairs.length >= 3) {
+          let html = '<div class="block">';
+          for (const [k,v] of pairs) html += `<div><b>${k}:</b> ${v}</div>`;
+          html += '</div>';
+          return html;
+        }
+        return `<div class="block">${p.replace(/\n/g,'<br>')}</div>`;
+      }
+      return `<pre class="json">${JSON.stringify(obj, null, 2)}</pre>`;
+    }
+
+    function formatCell(value, colName) {
+      const obj = tryParseJSON(value);
+      if (colName && colName.toLowerCase().includes('prompt_initial_json') && obj) {
+        const pretty = fmtPromptObject(obj);
+        if (pretty) {
+          const raw = (typeof value === 'string') ? value : JSON.stringify(value, null, 2);
+          return `${pretty}<div class="small-muted">JSON crudo <span class="toggle" onclick="this.nextElementSibling.hidden=!this.nextElementSibling.hidden">(ver/ocultar)</span><pre class="json" hidden>${raw}</pre></div>`;
+        }
+      }
+      if (obj) return `<pre class="json">${JSON.stringify(obj, null, 2)}</pre>`;
+      return (value ?? '').toString();
+    }
+
+    // KPIs (stats JSON)
+    async function loadStats() {
+      try {
+        const res = await fetch('/api/analytics/stats', { headers: { 'Accept': 'application/json' } });
+        const j = await res.json();
+        if (!j.ok) throw new Error(j.error || 'Error stats');
+        $('#kpi-total').textContent   = j.total_sessions ?? '0';
+        $('#kpi-avgpage').textContent = (j.avg_seconds_on_page ?? 0).toFixed(2) + ' s';
+        $('#kpi-avgfirst').textContent= (j.avg_seconds_to_first ?? 0).toFixed(2) + ' s';
+      } catch (e) {
+        console.warn('No se pudieron cargar KPIs:', e);
+      }
+    }
+
+    // Ejecutar SELECT (read-only) con render bonito
+    async function runQuery() {
+      const sql = $('#sql').value.trim();
+      const limit = Math.min(100, Math.max(1, parseInt($('#limit').value || '100', 10)));
+      if (!sql) { $('#out').innerHTML = '<span class="muted">Escribe un SELECT…</span>'; return; }
+
+      $('#out').textContent = 'Ejecutando…';
+      try {
+        const res = await fetch('/api/analytics/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept':'application/json' },
+          body: JSON.stringify({ sql, limit })
+        });
+        const j = await res.json();
+        if (!j.ok) { $('#out').innerHTML = `<div class="error">Error: ${j.error || 'desconocido'}</div>`; return; }
+        if (!j.rows || j.rows.length === 0) { $('#out').innerHTML = "<div class='muted'>Sin resultados.</div>"; return; }
+
+        const cols = j.columns && j.columns.length ? j.columns : Object.keys(j.rows[0]);
+
+        let html = '<div style="overflow:auto; max-height:60vh;"><table><thead><tr>';
+        cols.forEach(c => html += `<th>${c}</th>`);
+        html += '</tr></thead><tbody>';
+
+        j.rows.forEach(r => {
+          html += '<tr>';
+          cols.forEach(c => html += `<td>${formatCell(r[c], c)}</td>`);
+          html += '</tr>';
+        });
+
+        html += '</tbody></table></div>';
+        $('#out').innerHTML = html;
+      } catch (e) {
+        $('#out').innerHTML = `<div class="error">${e}</div>`;
+      }
+    }
+
+    // Presets → llenan el textarea y ejecutan
+    $$('.chip').forEach(el => el.addEventListener('click', () => {
+      $('#sql').value = el.getAttribute('data-sql');
+      runQuery();
+    }));
+
+    // Botón ejecutar
+    $('#run').addEventListener('click', runQuery);
+
+    // Logout manual
+    $('#btn-logout').addEventListener('click', async () => {
+      try {
+        await fetch('/analytics/logout', { method:'POST' });
+      } finally {
+        location.href = '/';
+      }
+    });
+
+    // Carga inicial de KPIs (sin botón)
+    loadStats();
+  </script>
+</body>
+</html>
+

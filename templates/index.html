@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GuíaIA</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
+</head>
+
+<body>
+    <header class="encabezado container">
+        <h1 class="encabezado__titulo">GuíaIA 🤖</h1>
+        <img src="{{ url_for('static', filename='img/logo-chatbot.png') }}" alt="Logo Chatbot" class="encabezado__logo">
+    </header>
+    <main class="main">
+        <section class="chat container" id="chat">
+    <!-- El mensaje de bienvenida ahora lo enviará dinámicamente el bot -->
+        </section>
+        <section class="entrada container">
+            <div class="entrada__container">
+                <button id="mas_archivo" aria-label="Botón de más opciones">
+                    <i class="icono icono--mas-opciones"></i>
+                </button>
+                <input type="text" class="entrada__input" placeholder="Enviar un mensaje" id="input">
+                <button aria-label="Botón de enviar" id="boton-enviar">
+                    <i class="icono icono--enviar-mensaje"></i>
+                </button>
+            </div>
+        </section>
+    </main>
+
+<script>
+(function(){
+  const ls = window.localStorage;
+  let device_id = ls.getItem("device_id");
+  if (!device_id) { device_id = crypto.randomUUID(); ls.setItem("device_id", device_id); }
+  const API = "/api/analytics/event";
+  const T0 = performance.now();
+
+  function send(evt, payload={}) {
+    fetch(API, {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({
+        device_id, event: evt, payload,
+        user_agent: navigator.userAgent,
+        referrer: document.referrer
+      })
+    }).catch(()=>{});
+  }
+
+  // arranca la sesión
+  send("init_session");
+
+  // cada 5s: heartbeat
+  const hb = setInterval(()=> send("heartbeat", {delta_ms: 5000}), 5000);
+
+  // funciones para enganchar botones/acciones
+  window.onFirstPromptCreated = (promptInitialObj) =>
+    send("prompt_created", { prompt_initial_json: promptInitialObj, time_to_first_prompt_ms: Math.round(performance.now()-T0) });
+
+  window.onImproveClick   = () => send("improve_click");
+  window.onClipboardCopy  = () => send("clipboard_copy");
+  window.onNewPromptClick = () => send("new_prompt_click");
+  window.onWrongAnswer    = () => send("wrong_answer");
+
+  window.addEventListener("beforeunload", ()=>{
+    clearInterval(hb);
+    const lived = Math.round(performance.now() - T0);
+    send("heartbeat", {delta_ms: lived % 5000});
+    send("end_session");
+  });
+})();
+</script>
+</body>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+<script src="{{ url_for('static', filename='js/index.js') }}"></script>
+</html>
