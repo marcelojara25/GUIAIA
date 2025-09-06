@@ -1,21 +1,92 @@
 // === GuíaIA - Pregunta por pregunta con validación contextual ===
 
-const chat = document.querySelector('#chat');
-const input = document.querySelector('#input');
-const btn = document.querySelector('#boton-enviar');
+// DOM
+const chat  = document.getElementById('chat');
+const input = document.getElementById('input');
+const btn   = document.getElementById('boton-enviar');
 
+// Estado
 let questions = [];
 let idx = 0;
-let answers = {};  // acumulado
-let fase = "preguntas"; // preguntas -> resultado
+let answers = {};            // respuestas acumuladas
+let fase = "preguntas";      // preguntas -> resultado
 
-function burUser(t){ const p=document.createElement('p'); p.className='chat__burbuja chat__burbuja--usuario'; p.textContent=t; chat.appendChild(p); }
-function burBot(html){ const p=document.createElement('p'); p.className='chat__burbuja chat__burbuja--bot'; p.innerHTML=html; chat.appendChild(p); return p; }
-function scroll(){ chat.scrollTop = chat.scrollHeight; }
+// Helpers de burbujas
+function burUser(t) {
+  const p = document.createElement('p');
+  p.className = 'chat__burbuja chat__burbuja--usuario';
+  p.textContent = t;
+  chat.appendChild(p);
+}
+function burBot(html) {
+  const p = document.createElement('p');
+  p.className = 'chat__burbuja chat__burbuja--bot';
+  p.innerHTML = html;
+  chat.appendChild(p);
+  return p;
+}
 
-async function getJSON(url){ const r=await fetch(url); if(!r.ok) throw new Error(await r.text()); return r.json(); }
-async function postJSON(url, body){ const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); if(!r.ok) throw new Error(await r.text()); return r.json(); }
+// Fetch helpers
+async function getJSON(url){
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function postJSON(url, body){
+  const r = await fetch(url, {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
 
+// ===== Auto-scroll robusto =====
+function scrollElToBottom(el, { smooth = true } = {}) {
+  if (!el) return;
+  const behavior = smooth ? 'smooth' : 'auto';
+  requestAnimationFrame(() => {
+    el.scrollTo({ top: el.scrollHeight, behavior });
+    // Fallback WebKit
+    setTimeout(() => { el.scrollTop = el.scrollHeight; }, 0);
+  });
+}
+function scrollChatToBottom(opts = {}) {
+  if (!chat) return;
+  const chatIsScrollable = chat.scrollHeight > chat.clientHeight + 1;
+  if (chatIsScrollable) {
+    scrollElToBottom(chat, opts);
+  } else {
+    // Si quien scrollea es el documento (layout muy alto)
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
+      setTimeout(() => { document.documentElement.scrollTop = document.documentElement.scrollHeight; }, 0);
+    });
+  }
+}
+// Observa inserciones (del bot o del usuario)
+if (chat) {
+  const observer = new MutationObserver(muts => {
+    for (const m of muts) {
+      if (m.type === 'childList' && m.addedNodes.length) {
+        scrollChatToBottom();
+        break;
+      }
+    }
+  });
+  observer.observe(chat, { childList: true, subtree: true });
+}
+// Eventos extra
+window.addEventListener('load',   () => scrollChatToBottom({ smooth:false }));
+window.addEventListener('resize', () => scrollChatToBottom({ smooth:false }));
+chat?.addEventListener('load', e => {
+  if (e.target && e.target.tagName === 'IMG') scrollChatToBottom();
+}, true);
+// Exponer por si quieres llamarlo manualmente
+window.scrollChatToBottom = scrollChatToBottom;
+
+// Inicio
 async function init(){
   const q = await getJSON('/questions');
   questions = q.questions || [];
@@ -24,24 +95,27 @@ async function init(){
   ask();
 }
 
+// Mostrar siguiente pregunta
 function ask(){
   const q = questions[idx];
-  input.value = "";                           // <-- limpia SIEMPRE al mostrar la siguiente
+  input.value = "";                                      // limpia SIEMPRE
   input.placeholder = q ? "Escribe tu respuesta…" : "";
   if (q) burBot(`<b>Pregunta ${idx+1}/${questions.length}:</b> ${q.label}`);
-  scroll();
+  scrollChatToBottom();
 }
 
+// Enviar respuesta
 async function enviar(){
   const val = (input.value || "").trim();
   if (!val || fase !== "preguntas") return;
 
   const q = questions[idx];
-  burUser(val);                               // si quieres ver tu respuesta como burbuja
-  input.value = "";                           // <-- limpia INMEDIATAMENTE
-  input.placeholder = "Validando…";           // feedback visual rápido
+  burUser(val);
+  input.value = "";
+  input.placeholder = "Validando…";
 
   const thinking = burBot("Validando…");
+  scrollChatToBottom();
 
   try {
     const v = await postJSON('/validate-step', {
@@ -52,46 +126,45 @@ async function enviar(){
 
     if (!v.ok){
       thinking.innerHTML = `❌ <b>No pasa validación:</b> ${v.hint}<br><i>Por favor, responde de nuevo esta pregunta.</i>`;
-      // ANALYTICS: registrar error de validación como "wrong_answer"
       try { if (typeof window.onWrongAnswer === "function") window.onWrongAnswer(); } catch {}
       input.placeholder = "Escribe tu respuesta…";
       input.focus();
-      scroll();
+      scrollChatToBottom();
       return;
     }
 
-    // OK: guardar y avanzar
+    // OK
     answers[q.id] = val;
     thinking.innerHTML = "✅ Ok. Registrado.";
     idx++;
 
     if (idx < questions.length){
-      ask();                                   // pregunta siguiente (input limpio)
+      ask();
     } else {
       await composeAndScore();
       fase = "resultado";
     }
   } catch(e){
     thinking.textContent = "Error de validación: " + e.message;
-    // ANALYTICS: también puedes considerarlo wrong_answer, si así lo prefieres
     try { if (typeof window.onWrongAnswer === "function") window.onWrongAnswer(); } catch {}
   } finally {
     if (fase === "preguntas") input.placeholder = "Escribe tu respuesta…";
-    scroll();
+    scrollChatToBottom();
   }
 }
 
-
+// Composición y score
 async function composeAndScore(){
   const p1 = burBot("Construyendo prompt inicial…");
+  scrollChatToBottom();
+
   const comp = await postJSON('/compose-initial', { answers_clean: answers });
   const prompt = comp.prompt || "(sin prompt)";
   p1.innerHTML = "<b>Prompt inicial:</b><br>" + prompt.replace(/\n/g,"<br>");
 
-  // ANALYTICS: enviar el evento "prompt_created" UNA sola vez por sesión
+  // Analytics: prompt_created (solo una vez)
   try {
     if (!window.__firstPromptLogged && typeof window.onFirstPromptCreated === "function") {
-      // Enviamos tanto el texto del prompt como las respuestas crudas y el esquema de preguntas
       const payload = {
         prompt_text: prompt,
         answers: {...answers},
@@ -103,6 +176,8 @@ async function composeAndScore(){
   } catch {}
 
   const p2 = burBot("Calculando Scorecard…");
+  scrollChatToBottom();
+
   const sc = await postJSON('/scorecard', { prompt });
   const c = sc.criteria || {};
   p2.innerHTML = `<b>Scorecard:</b> ${sc.total}/${sc.max}<br>` +
@@ -110,15 +185,18 @@ async function composeAndScore(){
     `tono=${c.tono??0}, formato=${c.formato??0}, ` +
     `longitud=${c.longitud??0}, calidad=${c.calidad??0}`;
 
-  // --- NUEVO: guardar prompt + mostrar botones una sola vez
   window.currentPromptText = prompt;
   renderActionButtonsOnce();
+  scrollChatToBottom();
 }
 
+// Eventos de UI
 btn.addEventListener('click', enviar);
 input.addEventListener('keyup', e => { if (e.key === 'Enter') enviar(); });
 
+// Inicia la app
 init();
+
 
 // ================== BOTONES POST-SCORE ==================
 function renderActionButtonsOnce(){
@@ -130,9 +208,9 @@ function renderActionButtonsOnce(){
   sec.style.marginTop = '12px';
   sec.innerHTML = `
     <div style="display:flex; gap:10px; flex-wrap:wrap;">
-    <button id="btn-new" class="btn btn-secondary">Iniciar otro prompt</button>
-    <button id="btn-improve" class="btn btn-primary">Mejorar con IA</button>
-  </div>
+      <button id="btn-new" class="btn btn-secondary">Iniciar otro prompt</button>
+      <button id="btn-improve" class="btn btn-primary">Mejorar con IA</button>
+    </div>
   `;
   chat.appendChild(sec);
 
@@ -141,19 +219,18 @@ function renderActionButtonsOnce(){
 
   function esc(s){ return (s||"").replace(/[&<>]/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;" }[m])); }
 
-  // 1) Reiniciar todo el flujo
+  // Reiniciar
   btnNew.addEventListener('click', async () => {
-    // ANALYTICS: "nuevo prompt"
     try { if (typeof window.onNewPromptClick === "function") window.onNewPromptClick(); } catch {}
     chat.innerHTML = "";
     input.value = "";
     questions = []; idx = 0; answers = {}; fase = "preguntas";
-    await init(); // vuelve a preguntar desde cero
+    await init();
+    scrollChatToBottom();
   });
 
-  // 2) Mejorar con IA (usa el último prompt compuesto)
+  // Mejorar con IA
   btnImprove.addEventListener('click', async () => {
-    // ANALYTICS: "improve_click"
     try { if (typeof window.onImproveClick === "function") window.onImproveClick(); } catch {}
 
     const basePrompt = (window.currentPromptText || "").trim();
@@ -169,12 +246,11 @@ function renderActionButtonsOnce(){
       if (data.error) throw new Error(data.error);
       const improved = (data.prompt || "").trim();
       burBot(`<b>Prompt mejorado (≤150 palabras):</b><br><pre style="white-space:pre-wrap;margin:0">${esc(improved)}</pre>`);
-      scroll();
+      scrollChatToBottom();
       renderPostImproveButtonsOnce(improved);
     }catch(e){
       burBot("⚠️ No se pudo mejorar el prompt: " + esc(e.message));
-      scroll();
-      // ANALYTICS opcional: también podrías registrar wrong_answer aquí
+      scrollChatToBottom();
       try { if (typeof window.onWrongAnswer === "function") window.onWrongAnswer(); } catch {}
     }finally{
       btnImprove.disabled = false; btnImprove.textContent = old;
@@ -186,9 +262,9 @@ function renderActionButtonsOnce(){
 function renderPostImproveButtonsOnce(improvedText){
   const row1 = document.getElementById('actionsRow');
   if (row1) row1.style.display = 'none';
+
   const EXISTING = document.getElementById('postImproveRow');
   if (EXISTING) {
-    // solo actualiza el texto guardado si ya existen
     EXISTING.dataset.prompt = improvedText || "";
     return;
   }
@@ -200,9 +276,9 @@ function renderPostImproveButtonsOnce(improvedText){
   sec.dataset.prompt = improvedText || "";
   sec.innerHTML = `
     <div style="display:flex; gap:10px; flex-wrap:wrap;">
-    <button id="btn-new-2" class="btn btn-secondary">Iniciar otro prompt</button>
-    <button id="btn-copy"  class="btn btn-primary">Copiar en portapapeles</button>
-  </div>
+      <button id="btn-new-2" class="btn btn-secondary">Iniciar otro prompt</button>
+      <button id="btn-copy"  class="btn btn-primary">Copiar en portapapeles</button>
+    </div>
   `;
   chat.appendChild(sec);
 
@@ -226,24 +302,23 @@ function renderPostImproveButtonsOnce(improvedText){
     }
   }
 
-  // 1) Reiniciar flujo
+  // Reiniciar flujo
   btnNew2.addEventListener('click', async () => {
-    // ANALYTICS: "nuevo prompt"
     try { if (typeof window.onNewPromptClick === "function") window.onNewPromptClick(); } catch {}
     chat.innerHTML = "";
     input.value = "";
     questions = []; idx = 0; answers = {}; fase = "preguntas";
     await init();
+    scrollChatToBottom();
   });
 
-  // 2) Copiar en portapapeles
+  // Copiar
   btnCopy.addEventListener('click', async () => {
     const txt = getPrompt();
     if (!txt) { alert("No hay prompt mejorado para copiar."); return; }
     const ok = await copyToClipboard(txt);
     burBot(ok ? "✅ Prompt copiado al portapapeles." : "⚠️ No se pudo copiar. Copia manualmente.");
-    scroll();
-    // ANALYTICS: "clipboard_copy"
+    scrollChatToBottom();
     try { if (typeof window.onClipboardCopy === "function") window.onClipboardCopy(); } catch {}
   });
 }

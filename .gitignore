@@ -1,2 +1,55 @@
-/.vscode
-/__pycache__
+# --- OS / editores ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# --- Python básico ---
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+
+# --- Testing / linters / tooling ---
+.pytest_cache/
+.coverage
+.coverage.*
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.pyre/
+
+# --- Empaquetado / build ---
+.Python
+build/
+dist/
+eggs/
+*.egg-info/
+*.egg
+pip-wheel-metadata/
+
+# --- App runtime / bases locales ---
+instance/
+*.sqlite3
+*.db
+dev.db
+
+# --- Variables de entorno / llaves ---
+.env
+.env.*
+*.pem
+*.key
+
+# --- Logs ---
+*.log
+logs/
+
+# --- Frontend (caso futuro) ---
+node_modules/
+.sass-cache/
+.cache/
+*.map
