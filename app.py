@@ -271,6 +271,14 @@ class Prompt(Base):
     prompt_initial_json = Column(JSONB if DATABASE_URL.startswith("postgresql") else String, nullable=False)
     created_at = Column(DateTime, server_default=func.now())
 
+# --- Crear tablas si no existen (idempotente) ---
+if os.getenv("AUTO_CREATE_TABLES", "true").lower() == "true":
+    try:
+        with engine.begin() as conn:
+            Base.metadata.create_all(bind=conn)
+        print("DB ready ✅ (create_all)")
+    except Exception as e:
+        print("DB init error:", e)
 
 # =========================
 #   GeoIP (Opción B con API pública)
