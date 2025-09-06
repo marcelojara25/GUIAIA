@@ -15,7 +15,7 @@ Módulo IV — DevOps
 
 ## 2) Descripción general
 
-GuíaIA es una aplicación web en Flask que guía al usuario a construir un prompt de calidad "paso a paso", valida coherencia con IA y ofrece una opción para **mejorar el prompt** con el modelo generativo Gemini. Además, instrumenta **eventos de uso** (inicio de sesión anónima, heartbeats, clics, tiempos) y provee una **consola de analítica** con login de administrador para consultas SQL de solo lectura.
+GuíaIA es una aplicación web en Flask que guía al usuario a construir un prompt de calidad "paso a paso", valida coherencia con IA y ofrece una opción para **mejorar el prompt** con el modelo generativo Gemini. Además, instrumenta **eventos de uso** (inicio de sesión anónima, heartbeats, clics, tiempos) y provee una **consola de analítica** con login de administrador para consultas SQL de solo lectura. El flujo de uso culmina cuando el usuario copia su prompt final al portapapeles para reutilizarlo fuera de la aplicación.
 
 **Características clave**
 - Flujo guiado de preguntas y validación de coherencia.
@@ -232,6 +232,8 @@ El frontend envía eventos a `POST /api/analytics/event`, que se guardan en las 
 - `clipboard_copy` → usuario copió el prompt al portapapeles.  
 - `new_prompt_click` → usuario generó un nuevo prompt.  
 - `heartbeat` → mide tiempo activo en página (`time_on_page_ms`).
+
+El flujo típico del usuario concluye cuando utiliza el evento `clipboard_copy`, es decir, al copiar su prompt mejorado desde la aplicación hacia su portapapeles para usarlo externamente.
 
 ### 8.3. Uso en analítica
 
