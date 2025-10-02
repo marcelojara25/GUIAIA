@@ -1,6 +1,6 @@
 # GuíaIA — Documentación final de entrega (Módulo IV - DevOps)
 
-**Autor:** José Jara, Anita Chamba y Sheryl Mina   
+**Autor:** José Jara  
 **Proyecto:** GuíaIA — Chatbot paso a paso con validación, mejora con IA y consola de analítica
 **Repositorio base:** carpeta `GIUAIA-main` (https://github.com/marcelojara25/GUIAIA)  
 
